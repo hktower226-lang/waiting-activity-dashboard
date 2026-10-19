@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>경기지역본부 | 대기활동 현황판</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="경기지역본부 대기자 활동 및 지부별 보고 현황">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#161616;color:#eee;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Noto Sans KR",sans-serif}
+button{font:inherit;cursor:pointer}
+.app{min-height:100vh;background:#161616;padding-bottom:35px}
+header{padding:16px 16px 10px;border-bottom:1px solid #292929;background:#1c1c1c}
+.top{display:flex;justify-content:space-between;align-items:flex-end}
+.eyebrow{font-size:11px;color:#f5c400;font-weight:800;margin-bottom:5px}
+.title{font-size:21px;font-weight:900;margin:0}
+.big{font-size:31px;font-weight:900;color:#f5c400;line-height:1;text-align:right}
+.small{font-size:9px;color:#888;text-align:right}
+.dates{display:flex;gap:6px;margin-top:12px;overflow-x:auto;padding-bottom:3px}
+.chip{flex:0 0 auto;padding:6px 12px;border-radius:20px;background:#232323;border:1px solid #363636;color:#999;font-size:12px;font-weight:700}
+.chip.active{background:#f5c400;color:#191919;border-color:#f5c400}
+.card{margin:14px 14px 0;background:#1c1c1c;border:1px solid #292929;border-radius:12px;padding:12px 8px 9px}
+.cardhead{display:flex;justify-content:space-between;align-items:center;padding:0 6px 9px;gap:8px}
+.label{font-size:11px;color:#999;font-weight:800}
+.tabs{display:flex;background:#232323;border-radius:8px;padding:2px;gap:2px}
+.tab{border:0;background:transparent;color:#888;border-radius:6px;padding:6px 8px;font-size:10px;font-weight:800}
+.tab.active{background:#f5c400;color:#191919}
+.chart{display:flex;align-items:flex-end;gap:10px;height:185px;padding:10px 8px 5px}
+.barwrap{height:100%;flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;min-width:28px}
+.barvalue{font-size:11px;color:#fff;font-weight:bold;margin-bottom:4px}
+.bar{width:70%;max-width:44px;border-radius:5px 5px 0 0;min-height:3px;box-shadow:0 0 6px rgba(245,196,0,0.2)}
+.barlabel{font-size:11px;color:#aaa;margin-top:6px}
+.list{padding-top:2px}
+.prow{display:flex;align-items:center;gap:7px;padding:6px;border-bottom:1px solid #222}
+.dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.pname{font-size:12px;font-weight:750;white-space:nowrap;display:flex;align-items:center;gap:3px}
+.pcount{font-size:11px;color:#f5c400;font-weight:bold;font-family:monospace}
+.ptag{font-size:9px;color:#777;width:25px;flex:0 0 25px}
+.pbar{height:14px;background:#262626;border-radius:7px;overflow:hidden;flex:1;box-shadow:inset 0 1px 2px rgba(0,0,0,0.5)}
+.fill{height:100%;border-radius:7px;min-width:3px;transition:width 0.3s ease}
+.badge{font-size:9px;font-weight:800;padding:2px 6px;border-radius:12px;border:1px solid;white-space:nowrap;font-family:monospace}
+.hint{text-align:center;font-size:10px;color:#666;margin-top:8px}
+.section{margin:14px 14px 0}
+.sectionhead{font-size:11px;color:#999;font-weight:800;margin-bottom:7px}
+.branch{background:#1c1c1c;border:1px solid #292929;border-radius:10px;margin-bottom:7px;overflow:hidden}
+.bhead{width:100%;border:0;background:transparent;color:#eee;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;text-align:left}
+.bleft{display:flex;align-items:center;gap:7px}
+.bname{font-size:13px;font-weight:800}
+.bcnt{font-size:10px;color:#888;font-family:monospace}
+.entries{border-top:1px solid #232323}
+.erow{display:flex;align-items:center;gap:8px;padding:7px 12px;border-top:1px solid #232323}
+.etime{font-size:11px;color:#f5c400;font-family:monospace;width:40px;flex:0 0 40px}
+.ebody{flex:1;min-width:0}
+.ename{font-size:13px;font-weight:700;display:flex;align-items:center;gap:4px}
+.eact{font-size:11px;color:#999;margin-top:2px;white-space:normal;word-break:keep-all}
+.footer{text-align:center;color:#555;font-size:10px;margin-top:16px}
+@media(max-width:420px){
+.tabs .tab{padding:6px 5px;font-size:9px}
+.prow{gap:5px}
+.ptag{width:24px;flex-basis:24px}
+.badge{font-size:8px;padding:2px 5px}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+let SD={},BC={},R=[],D={};
+let dates=[],sel="",mode="person",open={};
+
+async function loadData(){
+  try{
+    const response=await fetch("./data.json?v="+Date.now(), {cache:"no-store"});
+    if(!response.ok) throw new Error("data.json HTTP "+response.status);
+    const data=await response.json();
+
+    SD=data.SD||{};
+    BC=data.BC||{};
+    R=(data.R||[]).map(x=>({b:x[0],n:x[1],s:x[2],paused:!!x[3]}));
+    D=data.D||{};
+
+    Object.keys(D).forEach(k=>{
+      D[k]=D[k].map(x=>({b:x[0],n:x[1],a:x[2],t:x[3]}));
+    });
+
+    dates=Object.keys(D).sort().reverse();
+    if(!sel && dates.length) sel=dates[0];
+
+    render();
+  }catch(error){
+    document.getElementById("app").innerHTML=`
+      <div style="padding:30px;color:#f5c400;background:#161616;min-height:100vh;font-family:sans-serif">
+        <h2>데이터를 불러올 수 없습니다.</h2>
+        <p style="color:#aaa">data.json 파일이 index.html과 같은 폴더에 있는지 확인해주세요.</p>
+        <p style="color:#777">${error.message}</p>
+      </div>`;
+    console.error(error);
+  }
+}
+
+function addM(d,m){const r=new Date(d);r.setMonth(r.getMonth()+m);return r}
+function dday(n){
+  const r=R.find(x=>x.n===n);
+  if(!r)return null;
+  if(r.paused)return["보류","#888888"];
+  const exp=addM(new Date(r.s+"T00:00:00"),4),now=new Date();
+  now.setHours(0,0,0,0);
+  const diff=Math.round((exp-now)/86400000);
+  if(diff<0)return["만료 D+"+(-diff),"#D64541"];
+  if(diff<=7)return["D-"+diff,"#D64541"];
+  if(diff<=30)return["D-"+diff,"#E8A93B"];
+  return["D-"+diff,"#5F8A6B"];
+}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+
+function render(){
+  const entries=D[sel]||[];
+  const counts={};
+  const reportedNames=new Set(entries.map(e=>e.n));
+  entries.forEach(e=>(counts[e.b]??=new Set()).add(e.n));
+  Object.keys(counts).forEach(b=>counts[b]=counts[b].size);
+
+  const totalByPerson={};
+  R.forEach(r=>totalByPerson[r.n]={...r,c:SD[r.n]||0});
+  Object.values(D).forEach(day=>day.forEach(e=>{if(totalByPerson[e.n])totalByPerson[e.n].c++}));
+  const people=Object.values(totalByPerson).sort((a,b)=>b.c-a.c);
+  const max=Math.max(1,...people.map(p=>p.c));
+
+  let stat="";
+  if(mode==="branch"){
+    const arr=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+    const mx=Math.max(1,...arr.map(x=>x[1]));
+    stat='<div class="chart">'+arr.map(([b,c])=>`<div class="barwrap"><div class="barvalue">${c}</div><div class="bar" style="height:${Math.max(3,c/mx*135)}px;background:${BC[b]||"#888"}"></div><div class="barlabel">${b}</div></div>`).join("")+'</div>';
+  }else if(mode==="person"){
+    stat='<div class="list">'+people.map(p=>{
+      const d=dday(p.n);
+      return `<div class="prow"><span class="dot" style="background:${BC[p.b]||"#888"}"></span><span class="pname">${esc(p.n)} <span class="pcount">(${p.c}회)</span></span><span class="ptag">${esc(p.b)}</span><div class="pbar"><div class="fill" style="width:${p.c/max*100}%;background:${BC[p.b]||"#888"}"></div></div>${d?`<span class="badge" style="color:${d[1]};border-color:${d[1]}">${d[0]}</span>`:""}</div>`;
+    }).join("")+'</div><div class="hint">설문(6/23이전)+카톡(6/23이후) 합산</div>';
+  }else if(mode==="bp"){
+    const branches=["북부","북서","남부","남서","동부","서부","용인","중부"];
+    stat=branches.map(b=>{
+      const ms=R.filter(r=>r.b===b).map(r=>({n:r.n,total:(SD[r.n]||0)+Object.values(D).reduce((s,day)=>s+day.filter(e=>e.n===r.n).length,0)})).sort((a,z)=>z.total-a.total);
+      if(!ms.length)return "";
+      const mx=Math.max(1,...ms.map(x=>x.total));
+      return `<div style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:5px;padding:2px 6px 4px"><span class="dot" style="background:${BC[b]}"></span><span style="font-size:11px;font-weight:800;color:#f5c400">${b}지부</span><span style="font-size:10px;color:#666">${ms.length}명</span></div>${ms.map(p=>{
+        const d=dday(p.n);
+        return `<div class="prow"><span class="pname">${esc(p.n)} <span class="pcount">(${p.total}회)</span></span><div class="pbar"><div class="fill" style="width:${p.total/mx*100}%;background:${BC[b]}"></div></div>${d?`<span class="badge" style="color:${d[1]};border-color:${d[1]}">${d[0]}</span>`:""}</div>`;
+      }).join("")}</div>`;
+    }).join("")+'<div class="hint">설문(6/23이전)+카톡(6/23이후) 합산</div>';
+  }else if(mode==="pdetail"){
+    const sortedPeople=[...people].sort((a,b)=>a.n.localeCompare(b.n,'ko'));
+    stat='<div class="list" style="padding:4px">'+sortedPeople.map(p=>{
+      const d=dday(p.n);
+      const userLogs=[];
+      Object.entries(D).forEach(([dt,list])=>{
+        list.forEach(e=>{if(e.n===p.n)userLogs.push({dt,...e})});
+      });
+      userLogs.sort((a,b)=>b.dt.localeCompare(a.dt));
+      const logHtml=userLogs.length>0
+        ?userLogs.map(l=>`<div style="font-size:10px;color:#aaa;padding:2px 0;border-bottom:1px dashed #262626"><span style="color:#f5c400;margin-right:6px">${l.dt.slice(5)} ${l.t?l.t:""}</span>${esc(l.a)}</div>`).join("")
+        :`<div style="font-size:10px;color:#555">최근 활동 내역 없음</div>`;
+      return `<div style="background:#222;border:1px solid #2a2a2a;border-radius:8px;padding:10px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="dot" style="background:${BC[p.b]||"#888"}"></span>
+            <span style="font-size:14px;font-weight:800;color:#fff">${esc(p.n)} <span style="font-size:12px;color:#f5c400">(${p.c}회)</span></span>
+            <span style="font-size:10px;color:#888;background:#161616;padding:2px 6px;border-radius:4px">${esc(p.b)}지부</span>
+          </div>
+          <div>${d?`<span class="badge" style="color:${d[1]};border-color:${d[1]}">${d[0]}</span>`:""}</div>
+        </div>
+        <div style="background:#1a1a1a;border-radius:6px;padding:6px 8px;max-height:100px;overflow-y:auto">${logHtml}</div>
+      </div>`;
+    }).join("")+'</div>';
+  }
+
+  let sectionContent="";
+  if(mode!=="pdetail"){
+    const groups={};
+    R.forEach(r=>(groups[r.b]??=[]).push(r));
+    const names=Object.entries(groups).sort((a,b)=>b[1].length-a[1].length).map(([b,list])=>{
+      const reported=list.filter(r=>entries.some(e=>e.n===r.n)).length,isOpen=open[b]!==false;
+      const rows=list.map(r=>{
+        const e=entries.find(x=>x.n===r.n),matches=entries.filter(x=>x.n===r.n),d=dday(r.n);
+        const pObj=people.find(x=>x.n===r.n);
+        const cnt=pObj?pObj.c:0;
+        return `<div class="erow" style="opacity:${e?1:.5}"><div class="etime">${e&&e.t?e.t:"--:--"}</div><div class="ebody"><div class="ename">${esc(r.n)} <span style="font-size:11px;color:#f5c400;font-weight:bold">(${cnt}회)</span></div><div class="eact">${matches.length?matches.map(x=>esc(x.a)).join(" / "):"미보고"}</div></div>${d?`<span class="badge" style="color:${d[1]};border-color:${d[1]}">${d[0]}</span>`:""}</div>`;
+      }).join("");
+      return `<div class="branch"><button class="bhead" onclick="toggleBranch('${b}')"><span class="bleft"><span class="dot" style="background:${BC[b]||"#888"}"></span><span class="bname">${b}지부</span><span class="bcnt">${list.length}명 · 보고${reported}</span></span><span style="color:#888">${isOpen?"⌃":"⌄"}</span></button>${isOpen?'<div class="entries">'+rows+'</div>':""}</div>`;
+    }).join("");
+    sectionContent=`<div class="section"><div class="sectionhead">지부별 명단 · ${sel.slice(5).replace("-","/")}</div>${names}</div>`;
+  }
+
+  document.getElementById("app").innerHTML=`
+    <div class="app">
+      <header>
+        <div class="top">
+          <div>
+            <div class="eyebrow">경기지역본부 · 통합 대기자 활동방</div>
+            <h1 class="title">대기활동 현황판</h1>
+          </div>
+          <div>
+            <div class="big">${reportedNames.size}</div>
+            <div class="small">선택일 보고 인원</div>
+          </div>
+        </div>
+        <div class="small" style="text-align:left;margin-top:7px">최근 등록된 활동일: ${dates[0]||"기록 없음"} · 기록 기준 집계</div>
+        <div class="dates">${dates.map(d=>`<button class="chip ${d===sel?"active":""}" onclick="selectDate('${d}')">${d.slice(5).replace("-","/")}</button>`).join("")}</div>
+      </header>
+      <div class="card">
+        <div class="cardhead">
+          <div class="label">${mode==="branch"?"지부별 활동 인원":mode==="person"?"개인별 누적 활동횟수":mode==="bp"?"지부별 개인 누적횟수":"개인별 명단 및 활동이력"}</div>
+          <div class="tabs">
+            <button class="tab ${mode==="branch"?"active":""}" onclick="setMode('branch')">◉ 지부별</button>
+            <button class="tab ${mode==="person"?"active":""}" onclick="setMode('person')">◯ 개인별</button>
+            <button class="tab ${mode==="bp"?"active":""}" onclick="setMode('bp')">지부·개인</button>
+            <button class="tab ${mode==="pdetail"?"active":""}" onclick="setMode('pdetail')">개인명단</button>
+          </div>
+        </div>
+        ${stat}
+      </div>
+      ${sectionContent}
+      <div class="footer">대기자 명단 ${R.length}명 · 활동일 ${dates.length}일 · 로그인 없이 열람 가능</div>
+    </div>`;
+}
+
+function selectDate(d){sel=d;render()}
+function setMode(m){mode=m;render()}
+function toggleBranch(b){open[b]=open[b]===false;render()}
+
+loadData();
+</script>
+</body>
+</html>

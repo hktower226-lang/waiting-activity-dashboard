@@ -78,7 +78,7 @@ async function loadData(){
 
     SD=data.SD||{};
     BC=data.BC||{};
-    R=(data.R||[]).map(x=>({b:x[0],n:x[1],s:x[2],paused:!!x[3]}));
+    R=(data.R||[]).map(x=>({b:x[0],n:x[1],s:x[2],paused:!!x[3],subOnly:x[4]==="대체전용"}));
     D=data.D||{};
 
     Object.keys(D).forEach(k=>{
@@ -118,14 +118,15 @@ function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",
 function render(){
   const entries=D[sel]||[];
   const counts={};
-  const reportedNames=new Set(entries.map(e=>e.n));
-  entries.forEach(e=>(counts[e.b]??=new Set()).add(e.n));
+  const activeEntries=entries.filter(e=>!R.some(r=>r.n===e.n&&r.subOnly));
+  const reportedNames=new Set(activeEntries.map(e=>e.n));
+  activeEntries.forEach(e=>(counts[e.b]??=new Set()).add(e.n));
   Object.keys(counts).forEach(b=>counts[b]=counts[b].size);
 
   const totalByPerson={};
-  R.forEach(r=>totalByPerson[r.n]={...r,c:SD[r.n]||0});
-  Object.values(D).forEach(day=>day.forEach(e=>{if(totalByPerson[e.n])totalByPerson[e.n].c++}));
-  const people=Object.values(totalByPerson).sort((a,b)=>b.c-a.c);
+  R.forEach(r=>totalByPerson[r.n]={...r,c:r.subOnly?0:(SD[r.n]||0)});
+  Object.values(D).forEach(day=>day.forEach(e=>{if(totalByPerson[e.n]&&!totalByPerson[e.n].subOnly)totalByPerson[e.n].c++}));
+  const people=Object.values(totalByPerson).sort((a,b)=>Number(a.subOnly)-Number(b.subOnly)||b.c-a.c);
   const max=Math.max(1,...people.map(p=>p.c));
 
   let stat="";
@@ -136,17 +137,17 @@ function render(){
   }else if(mode==="person"){
     stat='<div class="list">'+people.map(p=>{
       const d=dday(p.n);
-      return `<div class="prow"><span class="dot" style="background:${BC[p.b]||"#888"}"></span><span class="pname">${esc(p.n)} <span class="pcount">(${p.c}회)</span></span><span class="ptag">${esc(p.b)}</span><div class="pbar"><div class="fill" style="width:${p.c/max*100}%;background:${BC[p.b]||"#888"}"></div></div>${d?`<span class="badge" style="color:${d[1]};border-color:${d[1]}">${d[0]}</span>`:""}</div>`;
+      return `<div class="prow"><span class="dot" style="background:${BC[p.b]||"#888"}"></span><span class="pname">${esc(p.n)} <span class="pcount">${p.subOnly?'<span style="color:#9fc7ff;font-size:10px">대체전용</span>':`(${p.c}회)`}</span></span><span class="ptag">${esc(p.b)}</span><div class="pbar"><div class="fill" style="width:${p.subOnly?0:p.c/max*100}%;background:${BC[p.b]||"#888"}"></div></div>${d?`<span class="badge" style="color:${d[1]};border-color:${d[1]}">${d[0]}</span>`:""}</div>`;
     }).join("")+'</div><div class="hint">설문(6/23이전)+카톡(6/23이후) 합산</div>';
   }else if(mode==="bp"){
     const branches=["북부","북서","남부","남서","동부","서부","용인","중부"];
     stat=branches.map(b=>{
-      const ms=R.filter(r=>r.b===b).map(r=>({n:r.n,total:(SD[r.n]||0)+Object.values(D).reduce((s,day)=>s+day.filter(e=>e.n===r.n).length,0)})).sort((a,z)=>z.total-a.total);
+      const ms=R.filter(r=>r.b===b).map(r=>({n:r.n,subOnly:r.subOnly,total:r.subOnly?0:(SD[r.n]||0)+Object.values(D).reduce((s,day)=>s+day.filter(e=>e.n===r.n).length,0)})).sort((a,z)=>Number(a.subOnly)-Number(z.subOnly)||z.total-a.total);
       if(!ms.length)return "";
       const mx=Math.max(1,...ms.map(x=>x.total));
       return `<div style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:5px;padding:2px 6px 4px"><span class="dot" style="background:${BC[b]}"></span><span style="font-size:11px;font-weight:800;color:#f5c400">${b}지부</span><span style="font-size:10px;color:#666">${ms.length}명</span></div>${ms.map(p=>{
         const d=dday(p.n);
-        return `<div class="prow"><span class="pname">${esc(p.n)} <span class="pcount">(${p.total}회)</span></span><div class="pbar"><div class="fill" style="width:${p.total/mx*100}%;background:${BC[b]}"></div></div>${d?`<span class="badge" style="color:${d[1]};border-color:${d[1]}">${d[0]}</span>`:""}</div>`;
+        return `<div class="prow"><span class="pname">${esc(p.n)} <span class="pcount">${p.subOnly?'대체전용':`(${p.total}회)`}</span></span><div class="pbar"><div class="fill" style="width:${p.total/mx*100}%;background:${BC[b]}"></div></div>${d?`<span class="badge" style="color:${d[1]};border-color:${d[1]}">${d[0]}</span>`:""}</div>`;
       }).join("")}</div>`;
     }).join("")+'<div class="hint">설문(6/23이전)+카톡(6/23이후) 합산</div>';
   }else if(mode==="pdetail"){
@@ -158,14 +159,14 @@ function render(){
         list.forEach(e=>{if(e.n===p.n)userLogs.push({dt,...e})});
       });
       userLogs.sort((a,b)=>b.dt.localeCompare(a.dt));
-      const logHtml=userLogs.length>0
+      const logHtml=p.subOnly?'<div style="font-size:10px;color:#9fc7ff">활동 체크 제외 · 기간만 관리 (과거 활동기록 보존)</div>':userLogs.length>0
         ?userLogs.map(l=>`<div style="font-size:10px;color:#aaa;padding:2px 0;border-bottom:1px dashed #262626"><span style="color:#f5c400;margin-right:6px">${l.dt.slice(5)} ${l.t?l.t:""}</span>${esc(l.a)}</div>`).join("")
         :`<div style="font-size:10px;color:#555">최근 활동 내역 없음</div>`;
       return `<div style="background:#222;border:1px solid #2a2a2a;border-radius:8px;padding:10px;margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:6px">
             <span class="dot" style="background:${BC[p.b]||"#888"}"></span>
-            <span style="font-size:14px;font-weight:800;color:#fff">${esc(p.n)} <span style="font-size:12px;color:#f5c400">(${p.c}회)</span></span>
+            <span style="font-size:14px;font-weight:800;color:#fff">${esc(p.n)} <span style="font-size:12px;color:#f5c400">${p.subOnly?'대체전용':`(${p.c}회)`}</span></span>
             <span style="font-size:10px;color:#888;background:#161616;padding:2px 6px;border-radius:4px">${esc(p.b)}지부</span>
           </div>
           <div>${d?`<span class="badge" style="color:${d[1]};border-color:${d[1]}">${d[0]}</span>`:""}</div>
@@ -180,12 +181,12 @@ function render(){
     const groups={};
     R.forEach(r=>(groups[r.b]??=[]).push(r));
     const names=Object.entries(groups).sort((a,b)=>b[1].length-a[1].length).map(([b,list])=>{
-      const reported=list.filter(r=>entries.some(e=>e.n===r.n)).length,isOpen=open[b]!==false;
+      const reported=list.filter(r=>!r.subOnly&&activeEntries.some(e=>e.n===r.n)).length,isOpen=open[b]!==false;
       const rows=list.map(r=>{
-        const e=entries.find(x=>x.n===r.n),matches=entries.filter(x=>x.n===r.n),d=dday(r.n);
+        const e=r.subOnly?null:activeEntries.find(x=>x.n===r.n),matches=r.subOnly?[]:activeEntries.filter(x=>x.n===r.n),d=dday(r.n);
         const pObj=people.find(x=>x.n===r.n);
         const cnt=pObj?pObj.c:0;
-        return `<div class="erow" style="opacity:${e?1:.5}"><div class="etime">${e&&e.t?e.t:"--:--"}</div><div class="ebody"><div class="ename">${esc(r.n)} <span style="font-size:11px;color:#f5c400;font-weight:bold">(${cnt}회)</span></div><div class="eact">${matches.length?matches.map(x=>esc(x.a)).join(" / "):"미보고"}</div></div>${d?`<span class="badge" style="color:${d[1]};border-color:${d[1]}">${d[0]}</span>`:""}</div>`;
+        return `<div class="erow" style="opacity:${e?1:.5}"><div class="etime">${e&&e.t?e.t:"--:--"}</div><div class="ebody"><div class="ename">${esc(r.n)} <span style="font-size:11px;color:#f5c400;font-weight:bold">${r.subOnly?'대체전용':`(${cnt}회)`}</span></div><div class="eact">${matches.length?matches.map(x=>esc(x.a)).join(" / ") :r.subOnly?"활동 체크 제외":"미보고"}</div></div>${d?`<span class="badge" style="color:${d[1]};border-color:${d[1]}">${d[0]}</span>`:""}</div>`;
       }).join("");
       return `<div class="branch"><button class="bhead" onclick="toggleBranch('${b}')"><span class="bleft"><span class="dot" style="background:${BC[b]||"#888"}"></span><span class="bname">${b}지부</span><span class="bcnt">${list.length}명 · 보고${reported}</span></span><span style="color:#888">${isOpen?"⌃":"⌄"}</span></button>${isOpen?'<div class="entries">'+rows+'</div>':""}</div>`;
     }).join("");

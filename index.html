@@ -78,7 +78,7 @@ async function loadData(){
 
     SD=data.SD||{};
     BC=data.BC||{};
-    R=(data.R||[]).map(x=>({b:x[0],n:x[1],s:x[2],paused:!!x[3],subOnly:x[4]==="대체전용"}));
+    R=(data.R||[]).map(x=>({b:x[0],n:x[1],s:x[2],paused:!!x[3],subOnly:x[4]==="대체전용",pausedDays:Number(x[5]||0)}));
     D=data.D||{};
 
     Object.keys(D).forEach(k=>{
@@ -106,6 +106,7 @@ function dday(n){
   if(!r)return null;
   if(r.paused)return["보류","#888888"];
   const exp=addM(new Date(r.s+"T00:00:00"),4),now=new Date();
+  exp.setDate(exp.getDate()+(r.pausedDays||0));
   now.setHours(0,0,0,0);
   const diff=Math.round((exp-now)/86400000);
   if(diff<0)return["만료 D+"+(-diff),"#D64541"];
